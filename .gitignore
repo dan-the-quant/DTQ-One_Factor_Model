@@ -3,6 +3,13 @@ __pycache__/
 *.py[codz]
 *$py.class
 
+# Ignore ALL CSV files
+*.csv
+*.pkl
+
+# Keep ONLY this CSV
+!Inputs/universe_data.csv
+
 # C extensions
 *.so
 
