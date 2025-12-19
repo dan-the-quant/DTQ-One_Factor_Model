@@ -156,7 +156,7 @@ for stock in index_tickers:
         x_matrix = sm.add_constant(x_window)
         
         # Weights
-        weights = 252 * wexp(252, 126)
+        weights = window * wexp(window, window/2)
         
         # WLS Regression
         model = sm.WLS(y_window, x_matrix, weights=weights)

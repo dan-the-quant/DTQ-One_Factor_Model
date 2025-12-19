@@ -3,6 +3,7 @@ import pandas as pd
 import numpy as np
 import pickle
 import re
+import matplotlib.pyplot as plt
 
 #%% 1. LOAD COVARIANCE MATRICES
 
@@ -70,3 +71,35 @@ with open("Outputs/predicted_betas_all_models.pkl", "wb") as f:
     pickle.dump(predicted_betas_all, f)
 
 #%% 5. PLOTS
+
+plt.figure(figsize=(10, 6))
+
+for k in predicted_betas_all.keys():
+    plt.plot(
+        predicted_betas_all[k]['AAPL'],
+    )
+
+plt.title('Predicted Beta Time Series – AAPL')
+plt.xlabel('Time')
+plt.ylabel('Beta')
+plt.legend()
+plt.grid()
+plt.show()
+
+#%%
+
+k = 'wls_ewma_standardized_alpha_504'
+
+plt.figure(figsize=(10, 6))
+
+plt.plot(
+    predicted_betas_all[k]['AAPL'],
+    alpha=0.7
+)
+
+plt.title('Predicted Betas – AAPL')
+plt.xlabel('Time')
+plt.ylabel('Beta')
+plt.legend(ncol=2)
+plt.grid()
+plt.show()
