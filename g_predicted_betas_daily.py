@@ -67,7 +67,7 @@ for key, cov_dict in cov_store.items():
     
 #%% 4. SAVE OUTPUT
 
-with open("Outputs/predicted_betas_all_models.pkl", "wb") as f:
+with open("Outputs/predicted_betas_daily_models.pkl", "wb") as f:
     pickle.dump(predicted_betas_all, f)
 
 #%% 5. PLOTS

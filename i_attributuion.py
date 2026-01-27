@@ -203,10 +203,10 @@ r_e = (r_i - r_b).subtract(r_m, axis=0)
 for stock in index_tickers:
     # Create the Plot
     plt.figure(figsize=(10, 6))
-    plt.plot(r_i[stock].cumsum(), label=f'{stock} Returns', alpha=1)
-    plt.plot(r_m.cumsum(), label='Market Factor Returns', alpha=1)
-    plt.plot(r_b[stock].cumsum(), label='Beta Factor Returns', alpha=1)
-    plt.plot(r_e[stock].cumsum(), label='Specific Returns', alpha=1)
+    plt.plot(r_i[stock].mul(100).cumsum(), label=f'{stock} Returns', alpha=1)
+    plt.plot(r_m.mul(100).cumsum(), label='Market Factor Returns', alpha=1)
+    plt.plot(r_b[stock].mul(100).cumsum(), label='Beta Factor Returns', alpha=1)
+    plt.plot(r_e[stock].mul(100).cumsum(), label='Specific Returns', alpha=1)
     
     # Config
     plt.title(f'{stock} Factor Returns Time Series')
@@ -216,6 +216,9 @@ for stock in index_tickers:
     
     # Show
     plt.grid()
+    
+    plt.savefig(f"plots\{stock}_attribution.png", dpi=300, bbox_inches="tight")
+    
     plt.show()
     
 #%%
@@ -238,16 +241,42 @@ plt.show()
 
 #%%
 
-# Create the Plot
-plt.figure(figsize=(10, 6))
-plt.plot(standardized_etf_betas[ticker], label=f'{ticker} Standardized Beta', alpha=1)
+# Plot Loop
+for stock in index_tickers:
+    # Create the Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(betas_df[stock], label=f'{stock} Beta', alpha=1)
+    
+    # Config
+    plt.title(f'{stock} Betas Time Series')
+    plt.xlabel('Time')
+    plt.ylabel('Beta')
+    plt.legend()
 
-# Config
-plt.title(f'{ticker} Betas Time Series')
-plt.xlabel('Time')
-plt.ylabel('Beta')
-plt.legend()
+    # Show
+    plt.grid()
+    
+    plt.savefig(f"plots\{stock}_beta.png", dpi=300, bbox_inches="tight")
+    
+    plt.show()
 
-# Show
-plt.grid()
-plt.show()
+#%%
+
+# Plot Loop
+for stock in index_tickers:
+    # Create the Plot
+    plt.figure(figsize=(10, 6))
+    plt.plot(standardized_etf_betas[stock], label=f'{stock} Standardized Beta', alpha=1)
+    
+    # Config
+    plt.title(f'{stock} Standardized Beta Time Series')
+    plt.xlabel('Time')
+    plt.ylabel('Beta')
+    plt.legend()
+
+    # Show
+    plt.grid()
+    
+    plt.savefig(f"plots\{stock}_standardized_beta.png", dpi=300, bbox_inches="tight")
+    
+    plt.show()

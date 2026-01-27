@@ -6,6 +6,9 @@ __pycache__/
 # Ignore ALL CSV files
 *.csv
 *.pkl
+*.jpg
+*.jpge
+*.png
 
 # Keep ONLY this CSV
 !Inputs/universe_data.csv

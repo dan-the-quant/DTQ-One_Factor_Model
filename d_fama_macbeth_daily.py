@@ -38,6 +38,7 @@ windows = [252, 504, 756, 1008, 1260]
 #############################################
 #         LOAD ALL BETAS STRUCTURES
 #############################################
+
 def load_beta_group(prefix):
     return {w: load_betas(f'Betas/{prefix}_{w}d.csv') for w in windows}
 
