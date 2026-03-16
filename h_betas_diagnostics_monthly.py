@@ -2,6 +2,7 @@
 
 import pandas as pd
 import numpy as np
+from scipy.stats import spearmanr
 import matplotlib.pyplot as plt
 import statsmodels.api as sm
 from statsmodels.stats.diagnostic import breaks_cusumolsresid
@@ -19,10 +20,10 @@ def load_betas(path):
     df.index = pd.to_datetime(df.index, dayfirst=True, format='mixed')
     return df
 
-windows = [252, 504, 756, 1008, 1260]
+windows = [12, 24, 36, 48, 60]
 
 def load_beta_group(prefix):
-    return {w: load_betas(f'Betas/{prefix}_{w}d.csv') for w in windows}
+    return {w: load_betas(f'Betas/{prefix}_{w}m.csv') for w in windows}
 
 sma_betas               = load_beta_group('sma_betas')
 shrunk_sma_betas        = load_beta_group('sma_shrunk')
@@ -48,44 +49,21 @@ def acf(df, lag):
     """
     Pearson autocorrelation at fixed lag for each column.
     """
-    return pd.Series(
-        {
-            c: df[c].iloc[lag:].corr(df[c].iloc[:-lag])
-            for c in df.columns
-        }
-    )
+    return df.apply(lambda x: x.autocorr(lag=lag))
 
 # Spearman ACF
 def spearman_acf(df, lag):
     """
     Spearman autocorrelation at fixed lag for each column.
     """
-    return pd.Series(
-        {
-            c: df[c].iloc[lag:].corr(df[c].iloc[:-lag], method="spearman")
-            for c in df.columns
-        }
-    )
-
-# Nyblom Test
-def nyblom_stat(series):
-    """
-    Nyblom (1989) stability statistic for constant-mean model.
-    Used for relative stability ranking (no p-values).
-    """
-    s = series.dropna().values
-    T = len(s)
-
-    if T < 10:
-        return np.nan
-
-    mu = np.mean(s)
-    u = s - mu
-
-    S = np.cumsum(u) / np.sqrt(T)
-    stat = np.mean(S**2)
-
-    return stat
+    result = {}
+    for c in df.columns:
+        series = df[c].dropna()
+        if len(series) <= lag:
+            result[c] = np.nan
+        else:
+            result[c] = spearmanr(series[:-lag], series[lag:])[0]
+    return pd.Series(result)
 
 # CUSUM Test
 def cusum_test(series):
@@ -117,17 +95,16 @@ for family, temporary_dict in beta_families.items():
     for w, df in temporary_dict.items():
 
         testing_betas = df.dropna(axis=1, how='any')
-
-        # Nyblom
-        nyblom_vals = testing_betas.apply(nyblom_stat)
+        testing_betas = testing_betas.loc['2009':]
         
         # CUSUM
         demeaned_betas = testing_betas - testing_betas.mean()
         cusum_vals = testing_betas.apply(cusum_test)
-        cumsumsq_vals = demeaned_betas.apply(cusum_test)
+        cumsumsq_vals = (demeaned_betas**2).apply(cusum_test)
 
         # ACF(21)
-        acf_vals = acf(testing_betas, lag=21)
+        acf_vals = acf(testing_betas, lag=1)
+        spearman_vals = spearman_acf(testing_betas, lag=1)
         
         # Variance
         var_vals = testing_betas.var()
@@ -135,7 +112,7 @@ for family, temporary_dict in beta_families.items():
         # Means-Mean
         betas_mean = testing_betas.mean()
         means_mean = betas_mean.mean()
-        means_median = betas_mean.mean()
+        means_median = betas_mean.median()
         
         # Medians-Median
         betas_median = testing_betas.median()
@@ -162,18 +139,18 @@ for family, temporary_dict in beta_families.items():
 
         results[key] = {
             'Window': w,
-            'Nyblom': nyblom_vals.mean(),
             'CUSUM': cusum_vals.mean(),
             'CUSUMSQ': cumsumsq_vals.mean(),
             'ACF_21': acf_vals.abs().median(),
+            'Spearman': spearman_vals.median(),
             'Variance': var_vals.mean(),
-            'Means_Mean': means_mean,
-            'Means_Median': means_median,
+            'Means_Mean': abs(means_mean),
+            'Means_Median': abs(means_median),
             'Medians_Median': abs(medians_median),
             'Medians_Mean': abs(medians_mean),
             'IQR': iqr_vals.mean(),
             'Outliers': outliers.mean(),
-            'Log_HLC': np.log(hlc.median())
+            'Log_HLC': np.log(hlc.median()),
         }
         
 #%%
@@ -186,15 +163,4 @@ results_df = (
 
 #%%
 
-plt.figure(figsize=(10, 6))
-plt.scatter(x=results_df['Log_Tau'], y=results_df['Variance'])
-
-# Config
-plt.title('Log_Tau vs. Variance')
-plt.xlabel('Log_Tau')
-plt.ylabel('Variance')
-
-# Show
-plt.grid()
-
-plt.show()
+results_df.to_csv(r'Outputs\beta_diagnostics_monthly.csv')

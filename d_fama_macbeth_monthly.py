@@ -63,6 +63,11 @@ dates = sma_betas[60].index
 fama_macbeth_market_factor = pd.DataFrame(index=dates)
 fama_macbeth_beta_factor   = pd.DataFrame(index=dates)
 fama_macbeth_r2            = pd.DataFrame(index=dates)
+fama_macbeth_aic           = pd.DataFrame(index=dates)
+fama_macbeth_bic           = pd.DataFrame(index=dates)
+fama_macbeth_market_tvals  = pd.DataFrame(index=dates)
+fama_macbeth_beta_tvals    = pd.DataFrame(index=dates)
+fama_macbeth_fstat         = pd.DataFrame(index=dates)
 
 
 #############################################
@@ -79,15 +84,35 @@ def fama_macbeth_single_date(y, b, weights=None, intercept=False):
     else:
         model = sm.WLS(y, X, weights=weights).fit()
     
+    # Stats offered by StatsModels
     params = model.params
-    r2 = model.rsquared
+    aic = model.aic
+    bic = model.bic
+    t_vals = model.tvalues
+    fstat = model.fvalue
+    
+    # RSS
+    if weights is None:
+        rss = np.sum(model.resid ** 2)
+    else:
+        rss = np.sum(model.wresid ** 2)
+    
+    # TSS
+    if weights is None:
+        tss = np.sum(y ** 2)
+    else:
+        tss = np.sum(weights * y ** 2)
+    
+    r2 = 1 - (rss/tss)
     
     if intercept:
         alpha, beta = params.iloc[0], params.iloc[1]
+        t0, t1 = t_vals.iloc[0], t_vals.iloc[1]
     else:
         alpha, beta = None, params.iloc[0]
+        t0, t1 = None, t_vals.iloc[0]
     
-    return alpha, beta, r2
+    return alpha, beta, r2, aic, bic, t0, t1, fstat
 
 #%%
 
@@ -102,9 +127,6 @@ for family_name, betas_dict in beta_families.items():
         print(f">>> {family_name.upper()} - window {w}")
 
         betas_w = betas_dict[w]
-        series_market = []
-        series_beta   = []
-        series_r2     = []
 
         for date in dates:
 
@@ -119,22 +141,34 @@ for family_name, betas_dict in beta_families.items():
             # Two runs: OLS + WLS, both no intercept
             for method, wts in [("ols", None), ("wls", weights)]:
 
-                α, β, r2 = fama_macbeth_single_date(
+                α, β, r2, aic, bic, t0, t1, f = fama_macbeth_single_date(
                     y=y,
                     b=b,
                     weights=wts,
                     intercept=False
                 )
 
-                col_market = f"{method}_{family_name}_{w}_market"
-                col_r2     = f"{method}_{family_name}_{w}_r2"
+                col_market   = f"{method}_{family_name}_{w}_market"
+                col_r2       = f"{method}_{family_name}_{w}_r2"
+                col_aic      = f"{method}_{family_name}_{w}_aic"
+                col_bic      = f"{method}_{family_name}_{w}_bic"
+                col_market_t = f"{method}_{family_name}_{w}_market_tval"
+                col_fstat    = f"{method}_{family_name}_{w}_fstat"
 
                 if col_market not in fama_macbeth_market_factor:
                     fama_macbeth_market_factor[col_market] = np.nan
                     fama_macbeth_r2[col_r2] = np.nan
+                    fama_macbeth_aic[col_aic] = np.nan
+                    fama_macbeth_bic[col_bic] = np.nan
+                    fama_macbeth_market_tvals[col_market_t] = np.nan
+                    fama_macbeth_fstat[col_fstat] = np.nan
 
                 fama_macbeth_market_factor.loc[date, col_market] = β
                 fama_macbeth_r2.loc[date, col_r2] = r2
+                fama_macbeth_aic.loc[date, col_aic] = aic
+                fama_macbeth_bic.loc[date, col_bic] = bic
+                fama_macbeth_market_tvals.loc[date, col_market_t] = t1
+                fama_macbeth_fstat.loc[date, col_fstat] = f
 
         print(f"Finished {family_name} window {w}")
 
@@ -149,10 +183,6 @@ for family in ["sma_standardized", "ewma_standardized"]:
     for w in windows:
         print(f">>> {family.upper()} WITH INTERCEPT - window {w}")
 
-        series_market = []
-        series_beta   = []
-        series_r2     = []
-
         for date in dates:
 
             b = betas_dict[w].loc[date].dropna()
@@ -161,56 +191,42 @@ for family in ["sma_standardized", "ewma_standardized"]:
 
             for method, weights in [("ols", None), ("wls", wts)]:
 
-                α, β, r2 = fama_macbeth_single_date(
+                α, β, r2, aic, bic, t0, t1, f = fama_macbeth_single_date(
                     y=y,
                     b=b,
                     weights=weights,
                     intercept=True
                 )
 
-                col_market = f"{method}_{family}_alpha_{w}_market"
-                col_beta   = f"{method}_{family}_alpha_{w}_beta"
-                col_r2     = f"{method}_{family}_alpha_{w}_r2"
+                col_market   = f"{method}_{family}_alpha_{w}_market"
+                col_beta     = f"{method}_{family}_alpha_{w}_beta"
+                col_r2       = f"{method}_{family}_alpha_{w}_r2"
+                col_aic      = f"{method}_{family}_alpha_{w}_aic"
+                col_bic      = f"{method}_{family}_alpha_{w}_bic"
+                col_market_t = f"{method}_{family}_alpha_{w}_market_tval"
+                col_beta_t   = f"{method}_{family}_alpha_{w}_beta_tval"
+                col_fstat    = f"{method}_{family}_alpha_{w}_fstat"
 
                 fama_macbeth_market_factor.loc[date, col_market] = α
                 fama_macbeth_beta_factor.loc[date, col_beta] = β
                 fama_macbeth_r2.loc[date, col_r2] = r2
+                fama_macbeth_aic.loc[date, col_aic] = aic
+                fama_macbeth_bic.loc[date, col_bic] = bic
+                fama_macbeth_market_tvals.loc[date, col_market_t] = t0
+                fama_macbeth_beta_tvals.loc[date, col_beta_t] = t1
+                fama_macbeth_fstat.loc[date, col_fstat] = f
 
         print(f"Finished intercept version for {family} window {w}")
-
+        
 #%%
 
 fama_macbeth_market_factor.to_csv(r'Outputs\fama_macbeth_market_factor_monthly.csv')
 fama_macbeth_beta_factor.to_csv(r'Outputs\fama_macbeth_beta_factor_monthly.csv')
 fama_macbeth_r2.to_csv(r'Outputs\fama_macbeth_r2_monthly.csv')
+fama_macbeth_aic.to_csv(r'Outputs\fama_macbeth_aic_monthly.csv')
+fama_macbeth_bic.to_csv(r'Outputs\fama_macbeth_bic_monthly.csv')
+fama_macbeth_market_tvals.to_csv(r'Outputs\fama_macbeth_market_tvals_monthly.csv')
+fama_macbeth_beta_tvals.to_csv(r'Outputs\fama_macbeth_beta_tvals_monthly.csv')
+fama_macbeth_fstat.to_csv(r'Outputs\fama_macbeth_fstat_monthly.csv')
 
 #%%
-
-r2_means = fama_macbeth_r2.mean()
-market_factor_means = fama_macbeth_market_factor.mul(100).mean() 
-market_factor_stds = fama_macbeth_market_factor.mul(100).std() 
-
-beta_factor_means = fama_macbeth_beta_factor.mul(100).mean()
-beta_factor_stds = fama_macbeth_beta_factor.mul(100).std()
-
-#%%
-
-market_stats = pd.DataFrame()
-
-market_stats['means'] = market_factor_means
-market_stats['stds'] = market_factor_stds
-
-market_stats['t-stats'] = (market_stats['means'] / market_stats['stds']) * np.sqrt(len(fama_macbeth_market_factor))
-
-r2_means.index = market_stats.index
-
-market_stats['r-squared'] = r2_means
-
-#%%
-beta_stats = pd.DataFrame()
-
-beta_stats['means'] = beta_factor_means
-beta_stats['stds'] = beta_factor_stds
-
-beta_stats['t-stats'] = (beta_stats['means'] / beta_stats['stds']) * np.sqrt(len(fama_macbeth_beta_factor))
-

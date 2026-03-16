@@ -1,6 +1,7 @@
 import pandas as pd
 import numpy as np
 import statsmodels.api as sm
+from scipy.stats import t
 from statsmodels.stats.sandwich_covariance import cov_hac
 from statsmodels.stats.diagnostic import breaks_cusumolsresid
 from statsmodels.tsa.stattools import acf
@@ -30,47 +31,56 @@ monthly_benchmark= load_benchmark("monthly").loc[monthly_market.index]
 #%% 2. FACTOR STATISTICS FUNCTION
 
 
-def factor_stats(series, benchmark, nw_lags=5, window=252, freq='daily'):
-    s = series.dropna()
+def factor_stats(series, benchmark, window=252, freq='daily'):
+    
+    # --- Parameters
+    s = series.mul(100).mul(window).dropna()
     T = len(s)
 
     # --- Mean and std ---
     mu = s.mean()
     sd = s.std()
     
-    # Cumulative Returns
-    cusum = s.sum()
-    
-    # Estimated Risk-Free Rate
-    rfr = benchmark.squeeze().mean() - mu
+    # --- Estimated Risk-Free Rate ---
+    rfr = benchmark.mul(100).mul(window).squeeze().mean() - mu
 
     # --- t-stat normal ---
-    t_norm = mu / (sd / np.sqrt(T))
-
-    # --- Newey–West t-stat ---
     X = np.ones(T)
     model = sm.OLS(s.values, X).fit()
+    t_norm = model.tvalues[0]
+
+    # --- Newey–West t-stat ---
+    nw_lags = int(np.floor(4 * (T / 100)**(2/9)))
     cov = cov_hac(model, nlags=nw_lags, use_correction=True)
     se_nw = np.sqrt(cov[0, 0])
     t_nw = model.params[0] / se_nw
+    
+    # --- p-value ---
+    df = len(s) - 1
+    p_value = 2 * (1 - t.cdf(abs(t_nw), df))
 
     # --- Bias-Test ---
     r_std = s.rolling(window=window).std().replace(0, np.nan)
+    r_std = r_std.shift(1)
     b = s / r_std
     bst = b.rolling(window=window).std()
     mean_bst = bst.mean()
+    
+    # --- MRAD
+    mrad = (bst - 1).abs().mean()
 
     # --- Correlation with benchmark ---
-    corr = series.corr(benchmark.squeeze())
+    corr = series.corr(benchmark.mul(100).mul(window).squeeze())
 
     return (
         mu,
         sd,
-        cusum,
         rfr,
         abs(t_norm),
         abs(t_nw),
+        p_value,
         mean_bst,
+        mrad,
         corr,
     )
 
@@ -82,15 +92,16 @@ freq_windows = {'daily': 252, 'weekly': 52, 'monthly': 12}
 def compute_table(df, bench, w, freq):
     return df.apply(
         lambda col: pd.Series(
-            factor_stats(col, bench, nw_lags=5, window=w, freq=freq),
+            factor_stats(col, bench, window=w, freq=freq),
             index=[
                 'mean',
                 'std',
-                'cumsum',
                 'rfr',
                 't-normal',
                 't-NW',
+                'p_value',
                 'Bias',
+                'MRAD',
                 'corr',
             ]
         )
