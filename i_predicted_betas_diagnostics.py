@@ -146,4 +146,3 @@ BASE_OUTPUT.mkdir(parents=True, exist_ok=True)
 
 for freq, cfg in FREQ_CONFIG.items():
     run_predicted_diagnostics_pipeline(freq, cfg)
-    
