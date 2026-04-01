@@ -59,6 +59,7 @@ numpy
 scipy
 statsmodels
 matplotlib
+yfinance
 ```
 
 All custom modules live under `src/one_factor_model/` and are imported directly — no installation required beyond adding the project root to `PYTHONPATH`.
