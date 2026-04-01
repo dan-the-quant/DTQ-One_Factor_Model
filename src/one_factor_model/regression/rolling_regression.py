@@ -12,47 +12,60 @@ def rolling_least_squares_regression(
         x_matrix: pd.DataFrame,
         weights: np.ndarray | None = None,
         window: int = 252,
-):
-    # Trimmed Returns
-    trimmed_y_matrix = y_matrix.iloc[window - 1:]
+) -> dict[str, pd.DataFrame]:
+    """
+    Rolling WLS/OLS regression over a sliding window.
 
-    # Define the dates
-    dates = trimmed_y_matrix.index
+    Parameters
+    ----------
+    y_matrix : pd.DataFrame
+        Dependent variables (assets as columns).
+    x_matrix : pd.DataFrame
+        Independent variables (already including constant if desired).
+    weights : np.ndarray, optional
+        Observation weights for WLS. If None, uses OLS.
+    window : int
+        Rolling window size (number of observations).
 
-    # Coefficients Dictionary
-    coefficients_dict = {col: pd.DataFrame() for col in x_matrix.columns}
-    coefficients_dict['sigma'] = pd.DataFrame()
+    Returns
+    -------
+    dict[str, pd.DataFrame]
+        Coefficients and sigma per regressor, indexed by date.
+    """
 
-    # Loop
+    dates = y_matrix.index[window - 1:]
+    coef_names = list(x_matrix.columns) + ['sigma']
+    coefficients_list = {col: [] for col in coef_names}
+    failures = 0
+
     for date in dates:
+        pos = y_matrix.index.get_loc(date)
+        x_window = x_matrix.iloc[pos - window + 1 : pos + 1]
+        y_window = y_matrix.iloc[pos - window + 1 : pos + 1]
 
-        # Set the windows
-        x_window = x_matrix.loc[:date].iloc[-window:]
-        y_window = y_matrix.loc[:date].iloc[-window:]
+        # Drop NaNs jointly across X and Y
+        valid_mask = x_window.notna().all(axis=1)
+        x_window = x_window[valid_mask]
+        y_window = y_window[valid_mask]
 
-        # Select Valid Stocks (those with enough data)
-        valid_stocks = y_window.count()[y_window.count() >= window].index
-        if len(valid_stocks) < 1:
+        # Keep only stocks with enough observations
+        valid_stocks = y_window.columns[y_window.count() >= window]
+        if valid_stocks.empty:
             continue
 
-        # Calculate the components for the optimization
-        valid_y_window = y_window[valid_stocks]
-        
-        # Optimization
         try:
-            # Calculate Coefficients
-            coeffs = linear_regression(valid_y_window, x_window, weights)
-            
-            # Loop for storing
+            coeffs = linear_regression(y_window[valid_stocks], x_window, weights)
             for x in coeffs.index:
-                # Storing
                 s = coeffs.loc[x]
                 s.name = date
-                
-                coefficients_dict[x] = pd.concat([coefficients_dict[x], s.to_frame().T])
-                
+                coefficients_list[x].append(s)
+
         except ValueError as e:
-            print(f"Fail in {date}: {e}")
+            failures += 1
             continue
-    
-    return coefficients_dict
+
+    if failures > 0:
+        import warnings
+        warnings.warn(f"Rolling regression: {failures} dates failed out of {len(dates)}.")
+
+    return {x: pd.DataFrame(rows) for x, rows in coefficients_list.items()}

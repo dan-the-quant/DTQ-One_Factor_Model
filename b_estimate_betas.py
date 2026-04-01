@@ -44,6 +44,8 @@ def get_weights(window: int, use_ewma: bool):
         return None
 
     half_life = window / 2
+    # Multiply by window so weights sum to `window` instead of 1,
+    # preserving the correct scale for WLS.
     return window * wexp(window, half_life)
 
 
@@ -70,57 +72,22 @@ def compute_betas(
 # RUN PIPELINE
 # =========================================================
 def run_beta_pipeline(freq: str, use_ewma: bool):
+    BASE_OUTPUT.mkdir(parents=True, exist_ok=True)
+
     returns = load_returns(freq)
     market = load_market(freq)
 
     suffix = "ewma" if use_ewma else "sma"
-
-    results = {}
 
     for window in WINDOWS[freq]:
         betas = compute_betas(returns, market, window, use_ewma)
         betas.index.name = "date"
         outfile = BASE_OUTPUT / f"{suffix}_betas_{window}{freq[0]}.csv"
         betas.to_csv(outfile)
-        results[window] = betas
 
-    return results
 
 #%%
 
-# Daily Betas with SMA
-run_beta_pipeline(
-    freq="daily",
-    use_ewma=False
-)
-
-# Daily Betas with EWMA
-run_beta_pipeline(
-    freq="daily",
-    use_ewma=True
-)
-
-# Weekly Betas with SMA
-run_beta_pipeline(
-    freq="weekly",
-    use_ewma=False
-)
-
-# Weekly Betas with EWMA
-run_beta_pipeline(
-    freq="weekly",
-    use_ewma=True
-)
-
-# Monthly Betas with SMA
-run_beta_pipeline(
-    freq="monthly",
-    use_ewma=False
-)
-
-# Monthly Betas with EWMA
-run_beta_pipeline(
-    freq="monthly",
-    use_ewma=True
-)
-
+for freq in ("daily", "weekly", "monthly"):
+    for use_ewma in (False, True):
+        run_beta_pipeline(freq=freq, use_ewma=use_ewma)

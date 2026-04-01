@@ -8,6 +8,16 @@ from src.one_factor_model.data_handler import (
 )
 
 
+#%% Winsorizing limits by frequency
+# Lower bound: -0.99 (log returns can't be below -99%, i.e. total loss)
+# Upper bound: varies by frequency — daily/weekly 200%, monthly 300% (higher ceiling for legit outliers)
+WINSOR_LIMITS = {
+    'D':  (-0.99, 2.0),
+    'W':  (-0.99, 2.0),
+    'ME': (-0.99, 3.0),
+}
+
+
 #%% Helper function: process returns for any frequency
 
 def process_returns(
@@ -22,7 +32,8 @@ def process_returns(
     # Preprocess
     rets = prices.apply(log_returns).iloc[1:]
     rets = filtering_variance(rets, var_threshold)
-    rets = winsorizing(rets, -0.99, 2)
+    lower, upper = WINSOR_LIMITS[freq]
+    rets = winsorizing(rets, lower, upper)
 
     return rets
 
@@ -49,8 +60,8 @@ rfr = (rfr['^TNX'] / 100).rename('risk_free_rate')
 
 # Convert annual to periodic
 dr = rfr.div(365).reindex(stock_log_returns_daily.index).ffill()
-wr = rfr.div(52).resample('W').last()
-mr = rfr.div(12).resample('ME').last()
+wr = rfr.div(52).resample('W').last().reindex(stock_log_returns_weekly.index).ffill()
+mr = rfr.div(12).resample('ME').last().reindex(stock_log_returns_monthly.index).ffill()
 
 # Save
 for name, df in zip(['daily_rfr', 'weekly_rfr', 'monthly_rfr'], [dr, wr, mr]):
@@ -85,9 +96,9 @@ def process_benchmark(benchmark, freq):
     return r['^GSPC'].rename('market')
 
 
-benchmark_daily = process_benchmark(benchmark_data, 'D').loc[stock_log_returns_daily.index]
-benchmark_weekly = process_benchmark(benchmark_data, 'W')
-benchmark_monthly = process_benchmark(benchmark_data, 'ME')
+benchmark_daily = process_benchmark(benchmark_data, 'D').reindex(stock_log_returns_daily.index)
+benchmark_weekly = process_benchmark(benchmark_data, 'W').reindex(stock_log_returns_weekly.index)
+benchmark_monthly = process_benchmark(benchmark_data, 'ME').reindex(stock_log_returns_monthly.index)
 
 # Save
 benchmark_daily.to_csv(r"Inputs/benchmark_returns_daily.csv")
@@ -101,6 +112,8 @@ market_premium_weekly = (benchmark_weekly - wr).rename('market_premium')
 market_premium_monthly = (benchmark_monthly - mr).rename('market_premium')
 
 # Save
-market_premium_daily.to_csv(r"Inputs/market_premium_daily.csv")
-market_premium_weekly.to_csv(r"Inputs/market_premium_weekly.csv")
-market_premium_monthly.to_csv(r"Inputs/arket_premium_monthly.csv")
+for name, df in zip(
+        ['market_premium_daily', 'market_premium_weekly', 'market_premium_monthly'],
+        [market_premium_daily, market_premium_weekly, market_premium_monthly]
+):
+    df.to_csv(fr"Inputs/{name}.csv")

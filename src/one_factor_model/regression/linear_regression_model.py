@@ -42,34 +42,19 @@ def linear_regression(
     if x_matrix.shape[0] != y_matrix.shape[0]:
         raise ValueError("The number of rows in X and Y must be the same.")
 
-    # Convert to numpy arrays
     X = np.asarray(x_matrix)
     Y = np.asarray(y_matrix)
-    n = X.shape[0]
-    
-    # Ensure 2D shapes
-    if X.ndim == 1:
-        X = X.reshape(-1, 1)
-    if Y.ndim == 1:
-        Y = Y.reshape(-1, 1)
 
-    # If no weights, use identity (OLS case)
-    if weights is None:
-        weights = np.ones(n)
+    # Weighted X (or plain X for OLS)
+    Xw = X * weights[:, None] if weights is not None else X
 
-    # Ensure proper shape and type
-    W = np.diagflat(weights)
+    # Solve a system instead of inverting explicitly
+    coef = np.linalg.solve(Xw.T @ X, Xw.T @ Y)
 
-    # Compute coefficients
-    XtWX_inv = np.linalg.inv(X.T @ W @ X)
-    coef = XtWX_inv @ (X.T @ W @ Y)
-
-    # Compute residual stds if requested
     if stds:
         sigmas = sigma(X, Y, coef)
         coef = np.vstack([coef, sigmas])
 
-    # Output as DataFrame
     coef = pd.DataFrame(coef, columns=y_matrix.columns)
     coef.index = list(x_matrix.columns) + (['sigma'] if stds else [])
 
